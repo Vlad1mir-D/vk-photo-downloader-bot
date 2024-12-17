@@ -61,7 +61,8 @@ class vk_wrapper:
                         'id': attachment['id'],
                         'owner_id': attachment['owner_id'],
                         'date': attachment['date'],
-                        'url': attachment['orig_photo']['url']
+                        'url': attachment['orig_photo']['url'],
+                        'type': attachment['type']
                      }
 
             sizes = ['s','m','x','o','p','q','r','y','z','w']
@@ -70,7 +71,8 @@ class vk_wrapper:
                     'id': attachment['id'],
                     'owner_id': attachment['owner_id'],
                     'date': attachment['date'],
-                    'url': best_size['url']
+                    'url': best_size['url'],
+                    'type': attachment['type']
                 }
 
         elif attachment['type'] == 'doc':
@@ -81,7 +83,8 @@ class vk_wrapper:
                         'date': attachment['date'],
                         'url': attachment['url'],
                         'title': attachment['title'],
-                        'ext': attachment['ext']
+                        'ext': attachment['ext'],
+                        'type': attachment['type']
                     }
 
             sizes = ['s','m','x','y','z','o']
@@ -92,13 +95,23 @@ class vk_wrapper:
                     'date': attachment['date'],
                     'url': best_size['src'],
                     'title': attachment['title'],
-                    'ext': attachment['ext']
+                    'ext': attachment['ext'],
+                    'type': attachment['type']
+                }
+
+        elif attachment['type'] == 'video':
+             return {
+                    'id': attachment['id'],
+                    'owner_id': attachment['owner_id'],
+                    'date': attachment['date'],
+                    'title': attachment['title'] if 'title' in attachment else None,
+                    'type': attachment['type']
                 }
 
     def get_attachments(self):
         message = self.get_full_message(self.__event['message'], self.__vk_main)
         attachments = self.get_message_attachments(message)
-        return [self.get_attachment(attachment) for attachment in self.filter_attachments(attachments, ['photo', 'doc'])]
+        return [self.get_attachment(attachment) for attachment in self.filter_attachments(attachments, ['photo', 'doc', 'video'])]
 
     def get_command(self):
         return self.__event['message']['text']
