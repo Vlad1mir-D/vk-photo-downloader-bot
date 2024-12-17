@@ -56,10 +56,9 @@ def get_img_request_handler(command):
         pic.save(obj)
 
     def handler(dir):
-        #imgs = [file for file in [] if os.path.isfile(dir+"/"+file)]
         imgs = sum(list(map(lambda t: ['{}/{}'.format(t,file) for file in os.listdir(dir+"/"+t) if os.path.isfile('{}/{}/{}'.format(dir,t,file))], [directory for directory in os.listdir(dir) if os.path.isdir(dir+"/"+directory)])), [])
         arch_path = dir+"/arch.zip"
-        print("handling photo req | dir: ", dir)
+        print("handling img request | dir: ", dir)
         with zipfile.ZipFile(arch_path, "w") as archive:
             for img in imgs:
                 #handle_command(dir+"/"+img, command)
@@ -72,21 +71,20 @@ def img_names_generator():
     for name in sequence_generator():
         yield str(name)+".jpg"
 
-def handle_request(event, photos, request_handler, *args):
+def handle_request(event, attachments, request_handler, reply_to = None, *args):
     request_id = str(generate_id())
     request_dir = "userData/" + request_id
     os.mkdir(request_dir)
 
-    vkHandler.send_message('downloading attachments...')
-    download_files(photos, request_dir, *args)
-    vkHandler.send_message('processing files...')
+    vkHandler.send_message('downloading attachments...', reply_to = reply_to)
+    download_files(attachments, request_dir, *args)
+    vkHandler.send_message('processing files...', reply_to = reply_to)
     arch_path = request_handler(request_dir)
-    vkHandler.send_message('uploading archive...')
-    vkHandler.send_message(attachment = arch_path)
+    vkHandler.send_message('uploading archive...', reply_to = reply_to)
+    vkHandler.send_message(attachment = arch_path, reply_to = reply_to)
     shutil.rmtree(request_dir)
 
 def download_file(kwargs):
-    #print('download', kwargs)
     resp = requests.get(kwargs['url'])
     if not os.path.isdir(kwargs['path']):
         os.mkdir(kwargs['path'])
@@ -94,40 +92,40 @@ def download_file(kwargs):
         writer.write(resp.content)
 
 
-def download_files(photos, path = ".", name_generator = sequence_generator()):
-    pool = Pool(max(min(len(photos), os.cpu_count()), 1))
-    #links = [{'url': link, 'path': path, 'name': next(name_generator)} for link in links]
-    photos = [{
-        'url': photo['url'],
-        'path': '{}/{}'.format(path,photo['owner_id']),
-        'name': '{:%Y-%m-%d_%H:%M:%S}_{}.jpg'.format(datetime.fromtimestamp(photo['date']), photo['id'])
-        } for photo in photos]
-    #print(photos)
-    pool.map(download_file, photos)
+def download_files(attachments, path = ".", name_generator = sequence_generator()):
+    pool = Pool(max(min(len(attachments), os.cpu_count()), 1))
+    attachments = [{
+        'url': attachment['url'],
+        'path': '{}/{}'.format(path,attachment['owner_id']),
+        'name': attachment['title'] if "title" in attachment and "ext" in attachment and attachment['title'] is not None and attachment['ext'] is not None and attachment['title'].lower().endswith("."+attachment['ext'].lower()) else ('{}.{}'.format(attachment['title'],attachment['ext']) if "title" in attachment and "ext" in attachment and attachment['title'] is not None and attachment['ext'] is not None else '{:%Y-%m-%d_%H:%M:%S}_{}.jpg'.format(datetime.fromtimestamp(attachment['date']), attachment['id']))
+        } for attachment in attachments]
+    pool.map(download_file, attachments)
     pool.close()
     pool.join()
- 
+
 def bot_loop():
     print("Bot loop started.")
     for event in vkHandler.listen():
         if event.type == vkHandler.longpoll.VkBotEventType.MESSAGE_NEW:
-            photos, command = vkHandler.get_photos(), vkHandler.get_command()
+            attachments, command, message_id = vkHandler.get_attachments(), vkHandler.get_command(), vkHandler.get_message_id()
             try:
-                handle_request(event, photos, get_img_request_handler(command), img_names_generator())
+                handle_request(event, attachments, get_img_request_handler(command), message_id, img_names_generator())
             except BaseException as e:
-                vkHandler.send_message("An error occured while processing your request.\n"+str(e))
+                vkHandler.send_message("An error occurred while processing your request.\n"+str(e),
+                        reply_to = message_id)
 
 
 def main():
     init()
-    print("Bot successfuly inited. Starting bot loop.")
+    print("Bot successfully initialized. Starting bot loop.")
     while True:
         try:
-            sleep(1)
+            sleep(1/10)
             bot_loop()
         except BaseException as e:
             print(e)
-            print("An error occured while bot worked. Restarting...")
+            print("An error occurred during events processing. Restarting...")
+            sleep(1/10)
 
 if __name__ == '__main__':
     main()

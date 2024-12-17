@@ -1,6 +1,7 @@
 import vk_api as vk
 import vk_api.bot_longpoll as longpoll
 from random import randint
+
 from datetime import datetime
 
 class vk_wrapper:
@@ -35,10 +36,10 @@ class vk_wrapper:
         return vk_main.method('messages.getById', params)['items'][0]
 
     @staticmethod
-    def get_attachments(message):
+    def get_message_attachments(message):
         result = message['attachments']
         for fwd_message in message.get('fwd_messages', []):
-            result.extend(vk_wrapper.get_attachments(fwd_message))
+            result.extend(vk_wrapper.get_message_attachments(fwd_message))
         
         return result
 
@@ -46,32 +47,66 @@ class vk_wrapper:
     def filter_attachments(attachments, at_type):
         result = []
         for attachment in attachments:
-            if (attachment['type'] == at_type):
-                result.append(attachment[at_type])
+            if (attachment['type'] in at_type):
+                attachment[attachment['type']]['type'] = attachment['type']
+                result.append(attachment[attachment['type']])
         
         return result
 
     @staticmethod
-    def get_photo(photo):
-        #print('photo', photo)
-        if photo['orig_photo'] is not None and photo['orig_photo']['url'] is not None:
-            return {'id': photo['id'], 'owner_id': photo['owner_id'], 'date': photo['date'], 'url': photo['orig_photo']['url']}
+    def get_attachment(attachment):
+        if attachment['type'] == 'photo':
+            if attachment['orig_photo'] is not None and attachment['orig_photo']['url'] is not None:
+                return {
+                        'id': attachment['id'],
+                        'owner_id': attachment['owner_id'],
+                        'date': attachment['date'],
+                        'url': attachment['orig_photo']['url']
+                     }
 
-        sizes = ['s','m','x','o','p','q','r','y','z','w']
-        best_size = max(photo['sizes'], key = lambda size: sizes.index(size['type']))
-        return {'id': photo['id'], 'owner_id': photo['owner_id'], 'date': photo['date'], 'url': best_size['url']}
+            sizes = ['s','m','x','o','p','q','r','y','z','w']
+            best_size = max(attachment['sizes'], key = lambda size: sizes.index(size['type']))
+            return {
+                    'id': attachment['id'],
+                    'owner_id': attachment['owner_id'],
+                    'date': attachment['date'],
+                    'url': best_size['url']
+                }
 
-    def get_photos(self):
+        elif attachment['type'] == 'doc':
+            if attachment['url'] is not None:
+                return {
+                        'id': attachment['id'],
+                        'owner_id': attachment['owner_id'],
+                        'date': attachment['date'],
+                        'url': attachment['url'],
+                        'title': attachment['title'],
+                        'ext': attachment['ext']
+                    }
+
+            sizes = ['s','m','x','y','z','o']
+            best_size = max(attachment['preview']['photo']['sizes'], key = lambda size: sizes.index(size['type']))
+            return {
+                    'id': attachment['id'],
+                    'owner_id': attachment['owner_id'],
+                    'date': attachment['date'],
+                    'url': best_size['src'],
+                    'title': attachment['title'],
+                    'ext': attachment['ext']
+                }
+
+    def get_attachments(self):
         message = self.get_full_message(self.__event['message'], self.__vk_main)
-        #print('message', message)
-        attachments = self.get_attachments(message)
-        #print('attachments', attachments)
-        return [self.get_photo(photo) for photo in self.filter_attachments(attachments, 'photo')]
+        attachments = self.get_message_attachments(message)
+        return [self.get_attachment(attachment) for attachment in self.filter_attachments(attachments, ['photo', 'doc'])]
 
     def get_command(self):
         return self.__event['message']['text']
 
-    def get_dialog_id(self):
+    def get_message_id(self):
+        return self.__event['message']['id']
+
+    def get_peer_id(self):
         return self.__event['message']['peer_id']
 
     def get_from_id(self):
@@ -83,8 +118,8 @@ class vk_wrapper:
     def get_date(self):
         return self.__event['message']['date']
 
-    def send_message(self, message = '', attachment = None, ):
-        peer_id = self.get_dialog_id()
+    def send_message(self, message = '', attachment = None, reply_to = None):
+        peer_id = self.get_peer_id()
         
         # try:
         #     if not attachment is None:  
@@ -94,17 +129,21 @@ class vk_wrapper:
         #     attachment = None
 
         if not attachment is None:  
-            attachment = self.__uploader.document_message(attachment, peer_id = peer_id, title='{}_{}_{:%Y-%m-%d_%H:%M:%S}.zip'.format(self.get_from_id(), self.get_id(), datetime.fromtimestamp(self.get_date())))
+            attachment = self.__uploader.document_message(attachment, peer_id = peer_id,
+                    title = '{}_{}_{:%Y-%m-%d_%H:%M:%S}.zip'.format(
+                        self.get_from_id(),
+                        self.get_id(),
+                        datetime.fromtimestamp(self.get_date())
+                    ))
+            print('attachment', attachment)
 
-
-        print('attachment', attachment)
         params = {
             'user_id': peer_id,
             'attachment': None if attachment is None else 'doc{owner_id}_{id}'.format(**attachment['doc']),
             'message': message,
-            'random_id': randint(0, 99999999999)
+            'random_id': randint(0, 99999999999),
+            'reply_to': reply_to
         }
         self.__vk_main.method('messages.send', params)
 
 
-    
