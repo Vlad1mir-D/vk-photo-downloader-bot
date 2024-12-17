@@ -1,6 +1,7 @@
 import vk_api as vk
 import vk_api.bot_longpoll as longpoll
 from random import randint
+from datetime import datetime
 
 class vk_wrapper:
     
@@ -51,21 +52,36 @@ class vk_wrapper:
         return result
 
     @staticmethod
-    def get_photo_link(photo):
+    def get_photo(photo):
+        #print('photo', photo)
+        if photo['orig_photo'] is not None and photo['orig_photo']['url'] is not None:
+            return {'id': photo['id'], 'owner_id': photo['owner_id'], 'date': photo['date'], 'url': photo['orig_photo']['url']}
+
         sizes = ['s','m','x','o','p','q','r','y','z','w']
         best_size = max(photo['sizes'], key = lambda size: sizes.index(size['type']))
-        return best_size['url']
+        return {'id': photo['id'], 'owner_id': photo['owner_id'], 'date': photo['date'], 'url': best_size['url']}
 
-    def get_photos_links(self):
+    def get_photos(self):
         message = self.get_full_message(self.__event['message'], self.__vk_main)
+        #print('message', message)
         attachments = self.get_attachments(message)
-        return [self.get_photo_link(photo) for photo in self.filter_attachments(attachments, 'photo')]
+        #print('attachments', attachments)
+        return [self.get_photo(photo) for photo in self.filter_attachments(attachments, 'photo')]
 
     def get_command(self):
         return self.__event['message']['text']
 
     def get_dialog_id(self):
         return self.__event['message']['peer_id']
+
+    def get_from_id(self):
+        return self.__event['message']['from_id']
+
+    def get_id(self):
+        return self.__event['message']['id']
+
+    def get_date(self):
+        return self.__event['message']['date']
 
     def send_message(self, message = '', attachment = None, ):
         peer_id = self.get_dialog_id()
@@ -78,7 +94,7 @@ class vk_wrapper:
         #     attachment = None
 
         if not attachment is None:  
-            attachment = self.__uploader.document_message(attachment, peer_id = peer_id)
+            attachment = self.__uploader.document_message(attachment, peer_id = peer_id, title='{}_{}_{:%Y-%m-%d_%H:%M:%S}.zip'.format(self.get_from_id(), self.get_id(), datetime.fromtimestamp(self.get_date())))
 
 
         print('attachment', attachment)
