@@ -131,7 +131,7 @@ class vk_wrapper:
     def get_date(self):
         return self.__event['message']['date']
 
-    def send_message(self, message = '', attachment = None, reply_to = None):
+    def send_message(self, message = '', attachments = None, reply_to = None):
         peer_id = self.get_peer_id()
         
         # try:
@@ -141,22 +141,43 @@ class vk_wrapper:
         #     message += "\nError: can't upload attachment."
         #     attachment = None
 
-        if not attachment is None:  
-            attachment = self.__uploader.document_message(attachment, peer_id = peer_id,
-                    title = '{}_{}_{:%Y-%m-%d_%H:%M:%S}.zip'.format(
+        i = 0
+        if not attachments is None and len(attachments) > 0:
+            for attachment in attachments:
+                i += 1
+                attachment_title = '{}_{}_{:%Y-%m-%d_%H:%M:%S}_{}.zip'.format(
                         self.get_from_id(),
                         self.get_id(),
-                        datetime.fromtimestamp(self.get_date())
-                    ))
-            print('attachment', attachment)
+                        datetime.fromtimestamp(self.get_date()),
+                        i
+                    ) if len(attachments) > 1 else '{}_{}_{:%Y-%m-%d_%H:%M:%S}.zip'.format(
+                        self.get_from_id(),
+                        self.get_id(),
+                        datetime.fromtimestamp(self.get_date()),
+                    )
+                attachment = self.__uploader.document_message(
+                        attachment,
+                        peer_id = peer_id,
+                        title = attachment_title
+                    )
+                print('attachment', attachment)
 
-        params = {
-            'user_id': peer_id,
-            'attachment': None if attachment is None else 'doc{owner_id}_{id}'.format(**attachment['doc']),
-            'message': message,
-            'random_id': randint(0, 99999999999),
-            'reply_to': reply_to
-        }
-        self.__vk_main.method('messages.send', params)
+                params = {
+                    'user_id': peer_id,
+                    'attachment': 'doc{owner_id}_{id}'.format(**attachment['doc']),
+                    'message': message,
+                    'random_id': randint(0, 99999999999),
+                    'reply_to': reply_to
+                }
+                self.__vk_main.method('messages.send', params)
+
+        else:
+            params = {
+                'user_id': peer_id,
+                'message': message,
+                'random_id': randint(0, 99999999999),
+                'reply_to': reply_to
+            }
+            self.__vk_main.method('messages.send', params)
 
 

@@ -11,6 +11,7 @@ import shutil
 from datetime import datetime
 from time import sleep
 import yt_dlp
+import traceback
 
 vkHandler = None
 
@@ -58,13 +59,28 @@ def get_img_request_handler(command):
 
     def handler(dir):
         imgs = sum(list(map(lambda t: ['{}/{}'.format(t,file) for file in os.listdir(dir+"/"+t) if os.path.isfile('{}/{}/{}'.format(dir,t,file))], [directory for directory in os.listdir(dir) if os.path.isdir(dir+"/"+directory)])), [])
-        arch_path = dir+"/arch.zip"
         print("handling img request | dir: ", dir)
-        with zipfile.ZipFile(arch_path, "w") as archive:
-            for img in imgs:
-                #handle_command(dir+"/"+img, command)
-                archive.write(dir+"/"+img, img)
-        return arch_path
+
+        archives = []
+        max_size = 200*1024*1024
+        cur_size = 0
+        cur_arch = 0
+        archive = zipfile.ZipFile(f'{dir}/arch{cur_arch}.zip', 'w')
+        archives.append(f'{dir}/arch{cur_arch}.zip')
+        for img in imgs:
+            img_size = os.path.getsize(f'{dir}/{img}')
+            if (cur_size + img_size) >= max_size:
+                cur_size = 0
+                cur_arch += 1
+                archive.close()
+                archive = zipfile.ZipFile(f'{dir}/arch{cur_arch}.zip', 'w')
+                archives.append(f'{dir}/arch{cur_arch}.zip')
+            #handle_command(f'{dir}/{img}', command)
+            archive.write(f'{dir}/{img}', img)
+            cur_size += img_size
+        archive.close()
+
+        return archives
 
     return handler
 
@@ -115,14 +131,17 @@ def bot_loop():
                 vkHandler.send_message('downloading attachments...', reply_to = message_id)
                 download_files(attachments, request_dir, img_names_generator())
                 vkHandler.send_message('processing files...', reply_to = message_id)
-                arch_path = request_handler(request_dir)
-                vkHandler.send_message('uploading archive...', reply_to = message_id)
-                vkHandler.send_message(attachment = arch_path, reply_to = message_id)
+                archives = request_handler(request_dir)
+                vkHandler.send_message('uploading archives...', reply_to = message_id)
+                vkHandler.send_message(attachments = archives, reply_to = message_id)
 
             except BaseException as e:
-                vkHandler.send_message("An error occurred while processing your request.\n"+str(e),
-                        reply_to = message_id)
-
+                tb_format = traceback.format_exc()
+                vkHandler.send_message(
+                        "An error occurred while processing your request.\n{}".format(tb_format.splitlines()[-1]),
+                        reply_to = message_id
+                    )
+                print(tb_format)
             finally:
                 shutil.rmtree(request_dir)
 
